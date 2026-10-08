@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Post</title>
+<style>
+    :root {
+        --color-bg: #f4f5f7;
+        --color-surface: #ffffff;
+        --color-text: #1f2328;
+        --color-muted: #6b7280;
+        --color-border: #e1e4e8;
+        --color-primary: #4f6ef7;
+        --color-primary-hover: #3b57d6;
+        --color-on-primary: #ffffff;
+        --color-secondary: #eef0f4;
+        --color-secondary-hover: #e1e4e8;
+        --radius: 10px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+        margin: 0;
+        padding: 32px 16px;
+        background: var(--color-bg);
+        color: var(--color-text);
+        font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        line-height: 1.5;
+    }
+
+    .page {
+        max-width: 640px;
+        margin: 0 auto;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+    }
+
+    .post, .comment {
+        background: var(--color-surface);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius);
+        padding: 20px;
+    }
+
+    .post_profile, .comment h3.comment_username {
+        margin: 0 0 8px;
+        font-size: 1rem;
+        font-weight: 600;
+        color: var(--color-muted);
+    }
+
+    .post_text, .comment_text {
+        margin: 0 0 16px;
+        font-size: 1.05rem;
+        word-wrap: break-word;
+    }
+
+    .submit_comment_seciton, .repaly_seciton {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        margin-top: 12px;
+    }
+
+    input[type="text"] {
+        padding: 8px 12px;
+        border: 1px solid var(--color-border);
+        border-radius: 6px;
+        font: inherit;
+        background: var(--color-surface);
+        color: var(--color-text);
+    }
+
+    input[type="text"]:focus {
+        outline: 2px solid var(--color-primary);
+        outline-offset: -1px;
+    }
+
+    button {
+        padding: 6px 14px;
+        border: none;
+        border-radius: 6px;
+        font: inherit;
+        font-size: 0.9rem;
+        cursor: pointer;
+        background: var(--color-primary);
+        color: var(--color-on-primary);
+        transition: background 0.15s ease;
+    }
+
+    button:hover { background: var(--color-primary-hover); }
+
+    .comment_actions {
+        display: flex;
+        gap: 8px;
+    }
+
+    .comment_actions button, .sub_comment button {
+        background: var(--color-secondary);
+        color: var(--color-text);
+    }
+
+    .comment_actions button:hover, .sub_comment button:hover {
+        background: var(--color-secondary-hover);
+    }
+
+    .sub_comments { margin-top: 16px; margin-left: 12px; }
+
+    .sub_comment {
+        border-left: 2px solid var(--color-border);
+        padding-left: 12px;
+        margin: 12px 0;
+    }
+
+    .sub_comment h3 { margin: 0 0 4px; font-size: 0.95rem; }
+    .sub_comment p { margin: 0 0 8px; }
+
+    .reply_target {
+        color: var(--color-muted);
+        font-size: 0.85em;
+    }
+</style>
+</head>
+<body>
+<div class="page">
+    <div class="post">
+        <h3 class="post_profile">{{post.username}}</h3>
+        <p class="post_text">{{post.text}}</p>
+        <div class="submit_comment_seciton">
+            <input type="text" id="comment_text" placeholder="write a comment...">
+            <input type="text" id="comment_username" placeholder="your name">
+            <button onclick="submit_comment({{post.id}})">submit</button>
+        </div>
+    </div>
+
+    <div class="comments">
+        {% for comment in comments %}
+        <div class="comment" data-username="{{comment.username}}">
+            <h3 class="comment_username">{{comment.username}}</h3>
+            <p class="comment_text">{{comment.comment_text}}</p>
+            <div class="comment_actions">
+                <button onclick="dispaly_single_reaply_seciton({{comment.id}}, null)">reply</button>
+                <button onclick="load_sub_comments({{comment.id}})">show replies</button>
+            </div>
+
+            <div class="sub_comments" id="sub_comments_{{comment.id}}" style="display: none;"></div>
+
+            <div class="repaly_seciton" id="reply_box_{{comment.id}}" style="display: none;">
+                <div class="reply_target" id="reply_label_{{comment.id}}"></div>
+                <input type="text" id="sub_comment_text_{{comment.id}}" placeholder="write a reply...">
+                <input type="text" id="sub_comment_username_{{comment.id}}" placeholder="your name">
+                <button onclick="submit_sub_comment({{comment.id}})">submit</button>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<script>
+async function submit_comment(post_id){
+    const text = document.getElementById("comment_text")
+    const username = document.getElementById("comment_username")
+
+    await fetch("/submit_comment", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({
+            'post_id': post_id,
+            'text': text.value,
+            'username': username.value
+        })
+    });
+
+    text.value = ""
+    username.value = ""
+    location.reload()
+}
+
+async function submit_sub_comment(main_comment_id){
+    const box = document.getElementById("reply_box_" + main_comment_id)
+    const text = document.getElementById("sub_comment_text_" + main_comment_id)
+    const username = document.getElementById("sub_comment_username_" + main_comment_id)
+
+    const reply_to_id = box.dataset.replyTo === "" ? null : Number(box.dataset.replyTo)
+
+    await fetch("/submit_sub_comment", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({
+            "main_comment_id": main_comment_id,
+            "reply_to_id": reply_to_id,
+            "text": text.value,
+            "username": username.value
+        })
+    });
+
+    text.value = ""
+    username.value = ""
+    box.style.display = "none"
+
+    load_sub_comments(main_comment_id)
+}
+
+function dispaly_single_reaply_seciton(main_comment_id, reply_to_id, reply_to_username){
+    document.querySelectorAll(".repaly_seciton").forEach(element => {
+        element.style.display = "none";
+    });
+
+    const box = document.getElementById("reply_box_" + main_comment_id)
+    const label = document.getElementById("reply_label_" + main_comment_id)
+
+    if (reply_to_id === null){
+        reply_to_username = box.closest(".comment").dataset.username
+    }
+
+    box.dataset.replyTo = reply_to_id === null ? "" : reply_to_id
+    label.textContent = "reply to >> " + reply_to_username
+    box.style.display = "flex";
+}
+
+async function load_sub_comments(comment_id){
+    const response = await fetch("/load_sub_comments", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({'comment_id': comment_id})
+    });
+    const sub_comments = await response.json();
+
+    const section = document.getElementById("sub_comments_" + comment_id)
+    const main_username = section.closest(".comment").dataset.username
+    section.innerHTML = ""
+
+    for (const sub of sub_comments){
+        const div = document.createElement("div")
+        div.className = "sub_comment"
+
+        const target = document.createElement("div")
+        target.className = "reply_target"
+        target.textContent = "reply to >> " + (sub.reply_to_username || main_username)
+
+        const name = document.createElement("h3")
+        name.textContent = sub.username
+
+        const text = document.createElement("p")
+        text.textContent = sub.comment_text
+
+        const reply_button = document.createElement("button")
+        reply_button.textContent = "reply"
+        reply_button.addEventListener("click", () => {
+            dispaly_single_reaply_seciton(comment_id, sub.id, sub.username)
+        })
+
+        div.append(target, name, text, reply_button)
+        section.appendChild(div)
+    }
+
+    section.style.display = "block"
+}
+</script>
+</body>
+</html>
